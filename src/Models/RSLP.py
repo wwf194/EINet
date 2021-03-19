@@ -105,19 +105,24 @@ class RSLP(nn.Module):
         return output, act
     def forward_init(self, batch_size):
         self.N.reset_x(batch_size=batch_size)
-    def forward_once(self, i_, output_type='r'):
-        r_ = i_[:, 0:self.N_num]
-        i_raw = i_[:, self.N_num:]
-        i_processed = self.prep_input_once(i_raw)
-        f, r, u = self.N.forward(i_processed + r_)
-        if output_type=='r':
-            o_ = r
-        elif output_type=='f':
-            o_ = f
+    def forward_once(self, x, h_in_detach, detach_i=True, detach_u=False): # [batch_size, input_num]
+        i = self.prep_input_once(x)
+        if detach_i:
+            i_ = i.detach()        
         else:
-            o_ = None
-        i_tot = torch.cat([r_, i_processed], dim=1)
-        return i_raw, i_processed, i_tot, o_
+            i_ = i
+        o, h_out, u = self.N.forward(i_ + h_in_detach, detach_u=detach_u)
+        state = {
+            'o': o,
+            'h_out': h_out,
+            'i': i,
+        }
+        if detach_i:
+            state['i_detach'] = i_
+        if detach_u:
+            state['u_detach'] = u
+        else:
+            state['u'] = u
     def response(self, x, iter_time=None):
         if(iter_time is None):
             iter_time = self.iter_time

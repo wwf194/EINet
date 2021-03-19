@@ -57,24 +57,52 @@ class Optimizer_TP(Optimizer):
         self.decoder_rec = self.build_decoder_single(self.dict['decoder_out'], load=load)
 
     def build_decoder_single(self, dict_, load=False):
+        return
     def build_decoder_mlp(self):
-    def train_on_r(self, data, step_num=None, model=None):
+        return
+    def train_on_h(self, data, step_num=None, model=None):
         x, y = data['input'], ['output']
         if step_num is None:
             step_num = self.model.step_num
         if model is None:
             model = self.model
+        
         # forward
-        r = torch.zeros([x.size(0), x.size(1)])
+        h_in_detach = torch.zeros([x.size(0), x.size(1)])
+        
+        h_in_detach_s = []
+        h_out_s = []
         for time in range(step_num):
-            state = self.model.forward_once({'r':r, 'x':x})
+            h_in_detach_s.append(h_in_detach)
+            state = self.model.forward_once(x=x, h_in_detach=h_in_detach, detach_i=True, detach_u=False)
+
+            h_out_s.append(state['h_out'])
+            h_in_detach = state['h_out'].detach() # for next iteration
             
+        output = state['o']
+        output_detach = state['o'].detach
 
+        # train decoder_rec
+        for time in range(step_num - 1):
+            h_in_pred = self.decoder_rec(h_in_detach_s[time+1])
+            loss_pred = self.loss_func(h_in_pred, h_in_detach_s[time])
+            loss_pred.backward(retain_graph=True)
+        # train decoder_out
+        h_in_pred = self.decoder_out(output_detach)
+        loss_pred = self.loss_func(h_in_pred, h_in_detach_s[step_num])
+        loss_pred.backward(retain_graph=True)
+        
+        
 
+        self.loss_func
 
-        # train decoder
 
         # train model
+        # calculate target
+        h_out_target = self.decoder_out(output_detach).detach()
+        h_out, h_out_target
+
+
 
         self.optimizer.zero_grad()
         loss = self.model.cal_perform(data)

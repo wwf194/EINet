@@ -132,17 +132,28 @@ class Neurons_LIF(nn.Module):
         x_e = (1.0 - self.time_const_e) * (self.x[:, 0:self.E_num] + self.get_noise(dx.size(0), self.E_num)) + self.time_const_e * dx[:, 0:self.E_num] #x:(batch_size, E_num)
         x_i = (1.0 - self.time_const_i) * (self.x[:, self.E_num:self.N_num] + self.get_noise(dx.size(0), self.I_num)) + self.time_const_i * dx[:, self.E_num:self.N_num] #x:(batch_size, I_num)        
         return torch.cat([x_e, x_i], dim=1)
-    def forward(self, i_):
-        dx = i_ + self.b
-        self.x = self.cal_x(dx) #x:(batch_size, neuron_num)
+    def forward(self, i):
+        dx = i + self.b
+        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
         u = self.act_func(self.x)
-        f = u.mm(self.get_f())
-        r = u.mm(self.get_r())
-        return f, r, u
+        o = u.mm(self.get_f())
+        h = u.mm(self.get_r())
+        return o, h, u
+    def forward_once(self, i, detach_u=False):
+        dx = i + self.b
+        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
+        u = self.act_func(self.x)
+        if detach_u:
+            u_ = u.detach()
+        else:
+            u_ = u
+        o = u_.mm(self.get_f())
+        h = u_.mm(self.get_r())
+        return o, h, u_
     def response_uni(self, i_):
         res = {}
         dx = i_ + self.b
-        self.x = self.cal_x(dx) #x:(batch_size, neuron_num)
+        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
         res['x'] = self.x
         u = self.act_func(self.x)
         res['u'] = u
@@ -152,7 +163,7 @@ class Neurons_LIF(nn.Module):
     def response_ei(self, i_):
         res = {}
         dx = i_ + self.b
-        self.x = self.cal_x(dx) #x:(batch_size, neuron_num)
+        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
         u = self.act_func(self.x)
         res['u'] = u
 
