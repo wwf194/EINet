@@ -16,7 +16,6 @@ class Optimizer(abc.ABC):
         self.verbose = get_from_dict(self.dict, 'verbose', default=True, write_default=True)
         #set_instance_variable(self, self.dict)
     def bind_model(self, model):
-        print('eee')
         if self.model is not None:
             if self.options.verbose:
                 print('Optimizer: binding new model. warning: this optimizer has already bound a model, and it will be detached.')

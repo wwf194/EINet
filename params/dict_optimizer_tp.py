@@ -3,12 +3,20 @@ lr_decoder = 10 * lr
 sub_optimizer_type = 'sgd'
 dict_ ={
     'class': 'optimizer',
+    'loss_main': 'MSE',
     'type': 'tp',
     'lr': lr,
     'sub_optimizer_type': sub_optimizer_type, # optimizer used to train encoder and decoder weights.
     
+    'lr_loss': 'MSE',
     'lr_decoder': lr_decoder,
-    'decoder':{
+    'decoder_rec':{
+        'type':'mlp',
+        'act_func':'relu',
+        'bias': True,
+        'lr': lr_decoder
+    },
+    'decoder_out':{
         'type':'mlp',
         'act_func':'relu',
         'bias': True,
@@ -30,7 +38,7 @@ dict_ ={
         'method': 'linear',
         'milestones': [[0.50, 1.0],[0.70, 1.0e-1], [0.85, 1.0e-2], [0.95, 1.0e-3]],
     },
-    'mode':'train_on_r', # train_on_r or train_on_u
+    'mode':'train_on_h', # train_on_h or train_on_u
     'get_target_method': 'gradient',
 }
 

@@ -194,8 +194,13 @@ class RSLP(nn.Module):
         #self.dict['act_avg'] = torch.mean(torch.abs(act))
         #print(output.size())
         #input()
+        return self.cal_perform_from_output(output, y, act)
+    def cal_perform_from_output(self, output, output_truth, act=None):
         loss_class = self.main_loss_coeff * self.class_perform_func( torch.squeeze(output[:,-1,:]), y)
-        loss_act = self.act_coeff * torch.mean(act ** 2)
+        if act is None:
+            loss_act = torch.zeros([1], device=self.device)
+        else:
+            loss_act = self.act_coeff * torch.mean(act ** 2)
         loss_weight = self.weight_coeff * ( torch.mean(self.N.get_r() ** 2) )
         self.perform_list['weight'] = self.perform_list['weight'] + loss_weight.item()
         self.perform_list['act'] = self.perform_list['act'] + loss_act.item()
@@ -203,7 +208,7 @@ class RSLP(nn.Module):
         correct_num, sample_num = cal_acc_from_label(output[:, -1, :], y) 
         self.perform_list['acc'] += correct_num
         self.batch_count += 1
-        self.sample_count += x.size(0)
+        self.sample_count += output.size(0)
         #print(self.batch_count)
         if self.hebb_coeff==0.0:
             loss_hebb = 0.0 
