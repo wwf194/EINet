@@ -52,7 +52,6 @@ class Trainer():
         while self.epoch_now <= self.epoch_end:
             print('epoch=%d'%(self.epoch_now), end=' ')
             train_loader, test_loader = self.data_loader.get_data()
-            
             # train model
             self.model.reset_perform()
             batch_num = 0
@@ -82,7 +81,7 @@ class Trainer():
 
             self.optimizer.update_epoch()
             self.epoch_now += 1
-
+        
         if self.save_after_train:
             self.model.save(save_path=self.save_model_path, save_name=self.model.dict['name'] + '_epoch=afterTrain')
         

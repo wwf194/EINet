@@ -117,20 +117,21 @@ class Neurons_LIF(nn.Module):
         #print(self.get_weight(name='I->I'))
         #input()
 
-    def reset_x_zero(self, batch_size):
+    def reset_x_zero(self, **kw):
         #print(batch_size)
-        self.x = torch.zeros((batch_size, self.dict['N_num']), device=self.device) #(batch_size, input_num)
-    def get_noise_gaussian(self, batch_size, neuron_num):
-        noise = torch.zeros((batch_size, neuron_num), device=self.device)
-        torch.nn.init.normal_(noise, 0.0, index['noise'])
-        return noise        
+        
+        self.x = torch.zeros((kw['batch_size'], self.dict['N_num']), device=self.device) #(batch_size, input_num)
+    def get_noise_gaussian(self, batch_size, N_num):
+        noise = torch.zeros((batch_size, N_num), device=self.device)
+        torch.nn.init.normal_(noise, 0.0, self.noise_coeff)
+        return noise
     def act_func_ei(self, x):
         return torch.cat( [self.act_func_e(x[:, 0:self.E_num]), self.act_func_i(x[:, self.E_num:self.N_num])], dim=1)
     def cal_x_uni(self, dx):
-        return (1.0 - self.time_const) * (self.x + self.get_noise(dx.size(0), self.N_num)) + self.time_const * dx #x:(batch_size, neuron_num)
+        return (1.0 - self.time_const) * (self.x + self.get_noise(dx.size(0), self.N_num)) + self.time_const * dx #x: [batch_size, neuron_num]
     def cal_x_ei(self, dx):
-        x_e = (1.0 - self.time_const_e) * (self.x[:, 0:self.E_num] + self.get_noise(dx.size(0), self.E_num)) + self.time_const_e * dx[:, 0:self.E_num] #x:(batch_size, E_num)
-        x_i = (1.0 - self.time_const_i) * (self.x[:, self.E_num:self.N_num] + self.get_noise(dx.size(0), self.I_num)) + self.time_const_i * dx[:, self.E_num:self.N_num] #x:(batch_size, I_num)        
+        x_e = (1.0 - self.time_const_e) * (self.x[:, 0:self.E_num] + self.get_noise(dx.size(0), self.E_num)) + self.time_const_e * dx[:, 0:self.E_num] #x: [batch_size, E_num]
+        x_i = (1.0 - self.time_const_i) * (self.x[:, self.E_num:self.N_num] + self.get_noise(dx.size(0), self.I_num)) + self.time_const_i * dx[:, self.E_num:self.N_num] #x: [batch_size, I_num]        
         return torch.cat([x_e, x_i], dim=1)
     def forward(self, i):
         dx = i + self.b

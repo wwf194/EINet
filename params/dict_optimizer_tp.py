@@ -1,24 +1,25 @@
 lr = 1.0e-2
 lr_decoder = 10 * lr
 sub_optimizer_type = 'sgd'
+decoder_type = 'mlp'
+decoder_act_func = 'relu'
 dict_ ={
     'class': 'optimizer',
-    'loss_main': 'MSE',
+    'main_loss': 'MSE',
+    'decoder_loss': 'MSE',
     'type': 'tp',
     'lr': lr,
     'sub_optimizer_type': sub_optimizer_type, # optimizer used to train encoder and decoder weights.
-    
-    'lr_loss': 'MSE',
     'lr_decoder': lr_decoder,
     'decoder_rec':{
-        'type':'mlp',
-        'act_func':'relu',
+        'type': decoder_type,
+        'act_func': decoder_act_func,
         'bias': True,
         'lr': lr_decoder
     },
     'decoder_out':{
-        'type':'mlp',
-        'act_func':'relu',
+        'type': decoder_type,
+        'act_func': decoder_act_func,
         'bias': True,
         'lr': lr_decoder
     },
@@ -71,4 +72,11 @@ elif lr_decay_method in ['None']:
     dict_optimizer['lr_decay'] = {'method':'None'}
 else:
     raise Exception('def_optimizer_param: Invalid lr_decay_method:%s'%(str(lr_decay_method)))
+'''
+
+'''
+'bias': True,
+'unit_nums': [2, encoder_output_num, encoder_output_num],
+'act_func': 'tanh',
+'act_func_on_last_layer': False,
 '''

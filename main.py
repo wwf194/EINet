@@ -265,6 +265,7 @@ def train(args=None, param_path=None, **kw):
 
     trainer = build_trainer(trainer_dict)
     data_loader = build_data_loader(data_loader_dict)
+    trainer.bind_data_loader(data_loader)
     # model can be RSLP, RMLP, RCNN ...
     model = build_model(model_dict)
     # optimizer can be BP, TP or CHL optimizer.
@@ -273,7 +274,7 @@ def train(args=None, param_path=None, **kw):
     optimizer.bind_trainer(trainer)
     trainer.bind_model(model)
     trainer.bind_optimizer(optimizer)
-    trainer.bind_data_loader(data_loader)
+    
     trainer.train() # the model needs some data from data_loader to get response properties.
     model.analyze(data_loader=data_loader)
 

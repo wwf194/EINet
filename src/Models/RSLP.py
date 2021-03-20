@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils import set_instance_attr, get_name, ensure_path, cal_acc_from_label
-from utils_model import init_weight
+from utils import set_instance_attr, get_name, ensure_path
+from utils_model import init_weight, cal_acc_from_label
 
 from Models.Neurons_LIF import Neurons_LIF
 
@@ -16,8 +16,8 @@ class RSLP(nn.Module):
         self.dict = dict_
         #self.device = self.dict['device']
         set_instance_attr(self, self.dict, exception=['N'])
-
         self.N = Neurons_LIF(dict_ = self.dict['N'], load=load)
+        self.output_num = self.N.output_num
         # set up weights
         if load:
             self.dict=torch.load(f, map_location=self.device) 
@@ -103,15 +103,22 @@ class RSLP(nn.Module):
         output = torch.cat(output_list, dim=1) #(batch_size, iter_time, output_num)
         act = torch.cat(act_list, dim=1) #(batch_size, iter_time, N_num)
         return output, act
-    def forward_init(self, batch_size):
-        self.N.reset_x(batch_size=batch_size)
-    def forward_once(self, x, h_in_detach, detach_i=True, detach_u=False): # [batch_size, input_num]
+    def reset(self, **kw):
+        self.N.reset_x(**kw)
+    def forward_once(self, x, h_in_detach, detach_i=True, detach_u=False, reset=False): # [batch_size, input_num]
+        if reset:
+            self.N.reset()
+
+        #print(x.device) 
+        x = x.view(x.size(0), -1)
         i = self.prep_input_once(x)
         if detach_i:
             i_ = i.detach()        
         else:
             i_ = i
-        o, h_out, u = self.N.forward(i_ + h_in_detach, detach_u=detach_u)
+        #print(i_.device)
+        #print(h_in_detach.device)
+        o, h_out, u = self.N.forward_once(i_ + h_in_detach, detach_u=detach_u)
         state = {
             'o': o,
             'h_out': h_out,
@@ -123,6 +130,8 @@ class RSLP(nn.Module):
             state['u_detach'] = u
         else:
             state['u'] = u
+        
+        return state
     def response(self, x, iter_time=None):
         if(iter_time is None):
             iter_time = self.iter_time
@@ -196,16 +205,21 @@ class RSLP(nn.Module):
         #input()
         return self.cal_perform_from_output(output, y, act)
     def cal_perform_from_output(self, output, output_truth, act=None):
-        loss_class = self.main_loss_coeff * self.class_perform_func( torch.squeeze(output[:,-1,:]), y)
+        if len(list(output.size()))==3:
+            output = output[:, -1, :]
+        #print(output.size())
+        #print(output_truth.size())
+        loss_class = self.main_loss_coeff * self.class_perform_func(output, output_truth)
         if act is None:
             loss_act = torch.zeros([1], device=self.device)
         else:
             loss_act = self.act_coeff * torch.mean(act ** 2)
+
         loss_weight = self.weight_coeff * ( torch.mean(self.N.get_r() ** 2) )
         self.perform_list['weight'] = self.perform_list['weight'] + loss_weight.item()
         self.perform_list['act'] = self.perform_list['act'] + loss_act.item()
         self.perform_list['class'] = self.perform_list['class'] + loss_class.item()
-        correct_num, sample_num = cal_acc_from_label(output[:, -1, :], y) 
+        correct_num, sample_num = cal_acc_from_label(output, output_truth) 
         self.perform_list['acc'] += correct_num
         self.batch_count += 1
         self.sample_count += output.size(0)

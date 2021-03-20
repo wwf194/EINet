@@ -40,7 +40,8 @@ class DataLoader_mnist:
         if self.dict.get('num_workers') is None:
             self.dict['num_workers'] = 0
 
-        self.data_dir = self.dict['data_dir']
+        self.data_path = self.dict['data_path']
+        self.num_class = self.dict['num_class'] = 10
         self.get_loader = self.get_data
     def get_loader(self):
         if self.dict.get('separate_train_test') is None:
@@ -58,11 +59,11 @@ class DataLoader_mnist:
         train_loader, test_loader = None, None
 
         if train is None and 'train' in self.dict['data_type']  or  train==True:
-            train_set = torchvision.datasets.MNIST(root=self.data_dir, train=True, transform=trans_train, download=False)
+            train_set = torchvision.datasets.MNIST(root=self.data_path, train=True, transform=trans_train, download=False)
             train_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True, num_workers=self.dict['num_workers'])
         
         if test is None and 'test' in self.dict['data_type']  or  test==True:
-            test_set = torchvision.datasets.MNIST(root=self.data_dir, train=False, transform=trans_test, download=False)
+            test_set = torchvision.datasets.MNIST(root=self.data_path, train=False, transform=trans_test, download=False)
             test_loader = DataLoader(dataset=test_set, batch_size=batch_size, shuffle=True, num_workers=self.dict['num_workers'])
 
         return train_loader, test_loader
@@ -83,8 +84,8 @@ class DataLoader_cifar10:
         if self.dict.get('num_workers') is None:
             self.dict['num_workers'] = 0
 
-        self.data_dir = self.dict['data_dir']
-        
+        self.data_path = self.dict['data_path']
+        self.num_class = self.dict['num_class'] = 10
         self.get_loader = self.get_data
 
     def code_reference(self):
@@ -123,11 +124,11 @@ class DataLoader_cifar10:
 
         train_loader, test_loader = None, None
         if train is None and 'train' in self.dict['data_type']  or  train==True:
-            train_set = torchvision.datasets.CIFAR10(root=self.data_dir, train=True, transform=trans_train, download=False)
+            train_set = torchvision.datasets.CIFAR10(root=self.data_path, train=True, transform=trans_train, download=False)
             train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=self.dict['batch_size'], shuffle=True, num_workers=self.dict['num_workers'])
         
         if test is None and 'test' in self.dict['data_type']  or  test==True:
-            test_set = torchvision.datasets.CIFAR10(root=self.data_dir, train=False, transform=trans_test, download=False)
+            test_set = torchvision.datasets.CIFAR10(root=self.data_path, train=False, transform=trans_test, download=False)
             test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=self.dict['batch_size'], shuffle=True, num_workers=self.dict['num_workers'])
 
         return train_loader, test_loader

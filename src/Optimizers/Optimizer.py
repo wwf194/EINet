@@ -27,7 +27,7 @@ class Optimizer(abc.ABC):
                 print('Optimizer: detaching model. this optimizer hasn\'t bound a model.')
         else:
             self.model = None
-    @abc.abstractmethod # must be implemented by child class.
+    #@abc.abstractmethod # must be implemented by child class.
     def train(self):
         return
     def save(self, dir_):
