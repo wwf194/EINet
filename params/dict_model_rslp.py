@@ -20,11 +20,7 @@ dict_ = {
     'N_num': N_num,
     'step_num': 10,
     'init_weight': init_weight,
-    'loss':{
-        'main_loss_func': 'CEL', # loss function to compute main loss
-        'main_loss_coeff': 1.0,
-        'act_coeff': 0.0e-4, # coefficient of L2 loss of average fire rate over time_step and neuron
-    },
+
     'noise_coeff': noise_coeff, 
     'separate_ei': separate_ei,
     'E_ratio': 0.8, # valid only if separate_ei is True
@@ -93,5 +89,5 @@ def interact(env_info):
 
     if env_info.get('device') is not None:
         dict_['device'] = dict_['N']['device'] = env_info['device']
-    
-
+    if env_info.get('optimizer_dict') is not None:
+        dict_['loss'] = env_info['optimizer_dict']['loss']

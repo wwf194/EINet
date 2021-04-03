@@ -138,5 +138,16 @@ class DataLoader_cifar10:
         with open(save_path + save_name, 'wb') as f:
             torch.save(self.dict, f)
 
-        
-        
+'''
+def prep_fashion(): # fashion_mnist  
+    transform = transforms.Compose(
+    [transforms.ToTensor()])
+
+    trainset = torchvision.datasets.FashionMNIST(root='./data/fashion_MNIST', transform=transform, train=True, download=True)
+    testset = torchvision.datasets.FashionMNIST(root='./data/fashion_MNIST', transform=transform, train=False, download=True)
+
+    trainloader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=True, num_workers=16)
+    testloader = DataLoader(dataset=testset, batch_size=batch_size_test, shuffle=False, num_workers=16)
+
+    return trainloader, testloader
+'''

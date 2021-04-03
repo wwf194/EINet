@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 from utils import search_dict
 from utils_model import build_optimizer, build_mlp, get_loss_func, scatter_label
@@ -18,16 +19,18 @@ class Optimizer_TP(Optimizer):
         else:
             raise Exception('Optimizer_TP: Invalid mode: %s'%self.mode)
         
-        self.main_loss_func = get_loss_func(self.dict['main_loss'])
-        if self.dict['main_loss'] in ['cel', 'CEL']:
+        self.loss_dict = self.dict['loss']
+        self.main_loss_func = get_loss_func(self.loss_dict['main_loss'])
+        if self.loss_dict['main_loss'] in ['cel', 'CEL']:
             self.get_target = self.get_target_cel
-        elif self.dict['main_loss'] in ['mse', 'MSE']:
+        elif self.loss_dict['main_loss'] in ['mse', 'MSE']:
             self.get_target = self.get_target_mse
         else:
-            raise Exception('Invalid main loss: %s'%self.dict['main_loss'])
+            raise Exception('Invalid main loss: %s'%self.loss_dict['main_loss'])
 
         self.device = self.dict.setdefault('device', 'cpu')
-        
+        #self.modules = []
+        self.modules = {}
     '''
     def receive_options(self, options):
         self.options = options
@@ -77,20 +80,26 @@ class Optimizer_TP(Optimizer):
         self.dict['decoder_out']['state_dict'] = self.decoder_out.state_dict() 
         self.decoder_rec = self.build_decoder_single(self.dict['decoder_rec'], load=load, decoder_type='rec')
         self.dict['decoder_rec']['state_dict'] = self.decoder_rec.state_dict()
-        self.decoder_out.to(self.device)
-        self.decoder_rec.to(self.device)
+        #self.decoder_out.to(self.device)
+        #self.decoder_rec.to(self.device)
+        self.modules.update({
+            'decoder_rec': self.decoder_rec,
+            'decoder_out': self.decoder_out
+        })
     def build_decoder_single(self, dict_, load=False, decoder_type=None):
         N_num = self.model.N_num
         type_ = dict_['type']
         if type_ in ['mlp']:
-            if dict_.get('unit_nums') is None:
+            if dict_.get('N_nums') is None:
                 if decoder_type in ['rec']:
-                    dict_['unit_nums'] = [N_num, 2 * N_num]
+                    dict_['N_nums'] = [N_num, 2 * N_num]
                 elif decoder_type in ['out']:
-                    dict_['unit_nums'] = [self.model.output_num, 2 * N_num]
+                    dict_['N_nums'] = [self.model.output_num, 2 * N_num]
                 else:
                     raise Exception('Invalid decoder type: %s'%decoder_type)
-            return build_mlp(dict_, load=load)
+            decoder =  build_mlp(dict_, load=load, device=self.device)
+            #self.modules.append(decoder)
+            return decoder
         else:
             raise Exception('Invalid decoder type: %s'%type_)
     def build_decoder_mlp(self):
@@ -111,7 +120,6 @@ class Optimizer_TP(Optimizer):
 
         # forward
         h_in_detach = torch.zeros([x.size(0), N_num]).to(model.device)
-        
         h_in_detach_s = []
         h_out_s = []
         i_s = []
@@ -124,7 +132,6 @@ class Optimizer_TP(Optimizer):
             h_i_detach_s.append(torch.cat([h_in_detach, state['i'].detach()], dim=1))
             h_out_s.append(state['h_out'])
             h_in_detach = state['h_out'].detach() # for next iteration
-            
             
         output = state['o']
         output_detach = state['o'].detach()
@@ -158,14 +165,23 @@ class Optimizer_TP(Optimizer):
             loss_i.backward(retain_graph=True)
             h_i_target = self.decoder_rec(h_i_target[:, 0:N_num]).detach()
             time -= 1
+        self.optimizer.step()
         model.cal_perform_from_output(output_detach, output_truth)
     def train_on_u(self, data):
         # forward
         # train decoder
         # train model
         return 
-    def get_target_cel(self, output, output_truth, is_label=True):
-        return
+    def get_target_cel(self, output, output_truth, is_label=True, coeff=1.0):
+        output_detach = output.detach()
+        output_detach.requires_grad = True
+        output_detach.retain_grad()
+        loss = F.cross_entropy(output, output_truth)
+        loss.backward()
+        print(output_detach.grad)
+        print('ratio of output_detach.grad / output_detach: %.4f'%coeff * (torch.sum(torch.abs(output_detach.grad))/torch.sum(torch.abs(output_detach)).item()))
+        output_target = output_detach - coeff * output_detach.grad
+        return output_target
     def get_target_mse(self, output, output_truth, is_label=True):
         if is_label:
             #print(output_truth)

@@ -4,6 +4,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 
 from utils import ensure_path, get_from_dict, search_dict
+from utils_model import print_model_params, print_optimizer_params
 
 class Trainer():
     def __init__(self, dict_, load=False, options=None):
@@ -49,26 +50,42 @@ class Trainer():
         self.test_performs = self.dict['test_performs'] = {}
         self.train_performs = self.dict['train_performs'] = {}
 
+        print_model_params(self.model)
+        print_model_params(self.optimizer.decoder_rec)
+        print_model_params(self.optimizer.decoder_out)
+        print(self.optimizer.decoder_rec.N_nums)
+        print(self.optimizer.decoder_out.N_nums)
+        print_optimizer_params(self.optimizer.optimizer_rec)
+        print_optimizer_params(self.optimizer.optimizer_out)
+        print_optimizer_params(self.optimizer.optimizer)
+
         while self.epoch_now <= self.epoch_end:
             print('epoch=%d'%(self.epoch_now), end=' ')
             train_loader, test_loader = self.data_loader.get_data()
             # train model
             self.model.reset_perform()
-            batch_num = 0
-            for data in train_loader:
+            batch_num = len(train_loader)
+            report_interval = int(batch_num / 10)
+            for batch_index, data in enumerate(train_loader):
                 #print('using batch No.%d\n'%(batch_num))
                 inputs, labels = data
                 self.optimizer.train({
                     'input': inputs.to(self.model.device),
                     'output': labels.to(self.model.device),
                 })
-                batch_num += 1
+                if batch_index % report_interval == 0:
+                    self.optimizer.model.anal_weight_change()
+                    self.optimizer.decoder_rec.anal_weight_change()
+                    print('decoder_rec weight change')
+                    self.optimizer.decoder_out.anal_weight_change()
+                    print('decoder_out weight change')
+                    pass
             train_perform = self.model.get_perform(prefix='train: ', verbose=True)
             self.train_performs[self.epoch_now] = train_perform
             
             # evaluate model
             self.model.reset_perform()
-            for data in list(train_loader):
+            for data in list(test_loader):
                 inputs, labels = data
                 self.optimizer.evaluate({
                     'input': inputs.to(self.model.device), 
@@ -157,4 +174,4 @@ class Evaluator():
         for data in list(train_loader):
             inputs, labels = data
             model.cal_perform(inputs.to(model.device), labels.to(model.device))
-        test_perform = model.get_perform(prefix='test: ', verbose=True)  
+        test_perform = model.get_perform(prefix='test: ', verbose=True)

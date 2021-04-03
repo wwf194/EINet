@@ -325,6 +325,18 @@ def backup(args):
         path_to = args.path
     copy_folder(path_from=os.path.abspath('../../'), path_to=path_to)
 
+def test_mlp():
+    from utils_model import build_mlp
+    mlp_dict = {
+        'bias': True,
+        'N_nums': [2, 10, 100],
+        'act_func': 'tanh',
+        'act_func_on_last_layer': False,     
+    }
+    mlp = build_mlp(mlp_dict)
+
+    
+
 if __name__=='__main__':
     if args.task is None:
         task = 'train'
@@ -337,5 +349,7 @@ if __name__=='__main__':
         train(args)
     elif task in ['backup']:
         backup(args)
+    elif task in ['test_mlp']:
+        test_mlp()
     else:
         raise Exception('Invalid task: %s'%str(task))

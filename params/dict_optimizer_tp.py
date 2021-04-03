@@ -5,7 +5,11 @@ decoder_type = 'mlp'
 decoder_act_func = 'relu'
 dict_ ={
     'class': 'optimizer',
-    'main_loss': 'MSE',
+    'loss':{
+        'main_loss': 'MSE', # loss function to compute main loss
+        'main_loss_coeff': 1.0,
+        'act_coeff': 0.0e-4, # coefficient of L2 loss of average fire rate over time_step and neuron
+    },
     'decoder_loss': 'MSE',
     'type': 'tp',
     'lr': lr,
@@ -50,8 +54,11 @@ def interact(env_info):
     model_dict = env_info['model_dict']
     if env_info.get('device') is not None:
         dict_['device'] = env_info['device']
-    if model_dict is not None:
-        dict_['loss_func'] = model_dict['loss']['main_loss_func']
+    #if model_dict is not None:
+    #    dict_['loss_func'] = model_dict['loss']['main_loss']
+    if env_info.get('data_loader_dict') is not None:
+        if env_info['data_loader_dict'].get('num_class') is not None:
+            dict_['loss']['num_class'] = env_info['data_loader_dict']['num_class']
     return
 
 '''
@@ -76,7 +83,7 @@ else:
 
 '''
 'bias': True,
-'unit_nums': [2, encoder_output_num, encoder_output_num],
+'N_nums': [2, encoder_output_num, encoder_output_num],
 'act_func': 'tanh',
 'act_func_on_last_layer': False,
 '''

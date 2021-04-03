@@ -4,9 +4,10 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 from utils import set_instance_attr, get_name, ensure_path
-from utils_model import init_weight, cal_acc_from_label
+from utils_model import init_weight, cal_acc_from_label, get_loss_func
 
 from Models.Neurons_LIF import Neurons_LIF
 
@@ -44,10 +45,14 @@ class RSLP(nn.Module):
             self.get_input = self.get_input_endure
 
         self.loss_dict = self.dict['loss']
-        if self.loss_dict['main_loss_func'] in ['CEL', 'cel']:
-            self.class_perform_func = torch.nn.CrossEntropyLoss()
-        elif self.loss_dict['main_loss_func'] in ['MSE', 'mse']:
-            self.class_perform_func = torch.nn.MSELoss()
+
+        self.main_loss_func = get_loss_func(self.loss_dict['main_loss'], truth_is_label=True, num_class=self.loss_dict['num_class'])
+        '''
+        if self.loss_dict['main_loss'] in ['CEL', 'cel']:
+            self.main_loss_func = torch.nn.CrossEntropyLoss()
+        elif self.loss_dict['main_loss'] in ['MSE', 'mse']:
+            self.main_loss_func = torch.nn.MSELoss()
+        '''
         self.main_loss_coeff = self.loss_dict['main_loss_coeff']
 
         self.perform_list = {'class':0.0, 'act':0.0, 'weight':0.0, 'acc':0.0}
@@ -74,6 +79,8 @@ class RSLP(nn.Module):
         self.I_num = self.N.dict['I_num']
         self.N_num = self.N.dict['N_num']
         self.dict['noself'] = self.N.dict['noself']
+
+        self.cache = {}
     def prep_input_once(self, i_):
         return torch.mm(i_, self.get_i()) + self.b_0
     def prep_input_endure(self, i_):
@@ -108,7 +115,6 @@ class RSLP(nn.Module):
     def forward_once(self, x, h_in_detach, detach_i=True, detach_u=False, reset=False): # [batch_size, input_num]
         if reset:
             self.N.reset()
-
         #print(x.device) 
         x = x.view(x.size(0), -1)
         i = self.prep_input_once(x)
@@ -130,7 +136,6 @@ class RSLP(nn.Module):
             state['u_detach'] = u
         else:
             state['u'] = u
-        
         return state
     def response(self, x, iter_time=None):
         if(iter_time is None):
@@ -209,7 +214,7 @@ class RSLP(nn.Module):
             output = output[:, -1, :]
         #print(output.size())
         #print(output_truth.size())
-        loss_class = self.main_loss_coeff * self.class_perform_func(output, output_truth)
+        loss_class = self.main_loss_coeff * self.main_loss_func(output, output_truth)
         if act is None:
             loss_act = torch.zeros([1], device=self.device)
         else:
@@ -229,12 +234,37 @@ class RSLP(nn.Module):
         else:
             loss_hebb = self.cal_perform_hebb(act)
         return loss_class + loss_act + loss_weight + loss_hebb
+    def anal_weight_change(self, verbose=True):
+        result = ''
+        r_1 = self.get_r().detach().cpu().numpy()
+        if self.cache.get('r') is not None:
+            r_0 = self.cache['r']
+            r_change_rate = np.sum(abs(r_1 - r_0)) / np.sum(np.abs(r_0))
+            result += 'r_change_rate: %.3f '%r_change_rate
+        self.cache['r'] = r_1
+
+        f_1 = self.get_f().detach().cpu().numpy()
+        if self.cache.get('f') is not None:
+            f_0 = self.cache['f']
+            f_change_rate = np.sum(abs(f_1 - f_0)) / np.sum(np.abs(f_0))
+            result += 'f_change_rate: %.3f '%f_change_rate
+        self.cache['f'] = f_1
+
+        if hasattr(self, 'get_i'):
+            i_1 = self.get_i().detach().cpu().numpy()
+            if self.cache.get('i') is not None:
+                i_0 = self.cache['i']
+                i_change_rate = np.sum(abs(i_1 - i_0)) / np.sum(np.abs(i_0))
+                result += 'i_change_rate: %.3f '%i_change_rate
+            self.cache['i'] = i_1
+        if verbose:
+            print(result)
+        return result
     def cal_perform_hebb(self, act):
         x = torch.squeeze(act[-1, :, :]) # [batch_size, N_num]
         batch_size=x.size(1)
         x = x.detach().cpu().numpy()
         x = torch.from_numpy(x).to(self.device)
-        
         weight=self.N.get_r() # [N_num, N_num]
         act_var = torch.var(x, dim=0) # [N_num]
         act_var = act_var * (batch_size - 1)
@@ -338,7 +368,7 @@ class RSLP(nn.Module):
                 ress[key].append(res[key])
             
             for time in range(iter_time):
-                iter_data['loss'][time] += self.class_perform_func( torch.squeeze(res['N->Y'][:,time,:]), labels)
+                iter_data['loss'][time] += self.main_loss_func( torch.squeeze(res['N->Y'][:,time,:]), labels)
                 iter_data['acc'][time] += ( torch.max( torch.squeeze(res['N->Y'][:,time,:] ), 1)[1]==labels).sum().item()
 
         for time in range(iter_time):

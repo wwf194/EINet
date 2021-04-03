@@ -1,8 +1,8 @@
 import config_ML
 
-
 dict_ = {
     'data_set': 'cifar10',
+    'num_class': 10,
     'data_path': config_ML.dir_cifar10,
     'gray': False # whether to make image grey.
 }
