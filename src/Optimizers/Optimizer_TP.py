@@ -146,6 +146,9 @@ class Optimizer_TP(Optimizer):
         loss_pred = self.decoder_loss_func(h_i_pred, h_i_detach_s[step_num-2])
         loss_pred.backward(retain_graph=True)
         
+        self.decoder_out.print_grad()
+        self.decoder_rec.print_grad()
+
         self.optimizer_out.step()
         self.optimizer_rec.step()
 
