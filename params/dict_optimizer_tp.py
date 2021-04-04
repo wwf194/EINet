@@ -3,6 +3,8 @@ lr_decoder = 10 * lr
 sub_optimizer_type = 'sgd'
 decoder_type = 'mlp'
 decoder_act_func = 'relu'
+decoder_bias= True
+decoder_batch_norm = True
 dict_ ={
     'class': 'optimizer',
     'loss':{
@@ -18,14 +20,18 @@ dict_ ={
     'decoder_rec':{
         'type': decoder_type,
         'act_func': decoder_act_func,
-        'bias': True,
-        'lr': lr_decoder
+        'bias': decoder_bias,
+        'lr': lr_decoder,
+        #'alter_weight_scale': True, # a simple way to alter weight scale to match output level.
+        'batch_norm': decoder_batch_norm,
     },
     'decoder_out':{
         'type': decoder_type,
         'act_func': decoder_act_func,
-        'bias': True,
-        'lr': lr_decoder
+        'bias': decoder_bias,
+        'lr': lr_decoder,
+        #'alter_weight_scale': True,
+        'batch_norm': decoder_batch_norm, # batch norm automatically alterate scale of weights and biases are to appropriate scale.
     },
     'optimizer_forward':{
         'lr':lr,
@@ -41,14 +47,11 @@ dict_ ={
     },
     'lr_decay':{
         'method': 'linear',
-        'milestones': [[0.50, 1.0],[0.70, 1.0e-1], [0.85, 1.0e-2], [0.95, 1.0e-3]],
+        'milestones': [[0.50, 1.0], [0.70, 1.0e-1], [0.85, 1.0e-2], [0.95, 1.0e-3]],
     },
     'mode':'train_on_h', # train_on_h or train_on_u
     'get_target_method': 'gradient',
 }
-
-def interact(env_info):
-    return
 
 def interact(env_info):
     model_dict = env_info['model_dict']

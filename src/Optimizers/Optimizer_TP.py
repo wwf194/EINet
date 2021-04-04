@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 from utils import search_dict
-from utils_model import build_optimizer, build_mlp, get_loss_func, scatter_label
+from utils_model import build_optimizer, build_mlp, get_loss_func, scatter_label, print_model_params
 
 from Optimizers.Optimizer import *
 from Optimizers.Optimizer import Optimizer
@@ -31,6 +31,7 @@ class Optimizer_TP(Optimizer):
         self.device = self.dict.setdefault('device', 'cpu')
         #self.modules = []
         self.modules = {}
+        self.cache = {}
     '''
     def receive_options(self, options):
         self.options = options
@@ -70,7 +71,7 @@ class Optimizer_TP(Optimizer):
     def build_optimizer(self, load=False):
         self.optimizer = build_optimizer(self.dict['optimizer_forward'], model=self.model, load=load)
         self.optimizer_rec = build_optimizer(self.dict['optimizer_rec'], model=self.decoder_rec, load=load)
-        self.optimizer_out = build_optimizer(self.dict['optimizer_out'], model=self.decoder_rec, load=load)
+        self.optimizer_out = build_optimizer(self.dict['optimizer_out'], model=self.decoder_out, load=load)
     def build_decoder(self, load=False):
         if self.dict.get('decoder_loss') is None:
             self.decoder_loss_func = self.main_loss_func
@@ -80,8 +81,6 @@ class Optimizer_TP(Optimizer):
         self.dict['decoder_out']['state_dict'] = self.decoder_out.state_dict() 
         self.decoder_rec = self.build_decoder_single(self.dict['decoder_rec'], load=load, decoder_type='rec')
         self.dict['decoder_rec']['state_dict'] = self.decoder_rec.state_dict()
-        #self.decoder_out.to(self.device)
-        #self.decoder_rec.to(self.device)
         self.modules.update({
             'decoder_rec': self.decoder_rec,
             'decoder_out': self.decoder_out
@@ -98,6 +97,7 @@ class Optimizer_TP(Optimizer):
                 else:
                     raise Exception('Invalid decoder type: %s'%decoder_type)
             decoder =  build_mlp(dict_, load=load, device=self.device)
+            decoder.to(self.device)
             #self.modules.append(decoder)
             return decoder
         else:
@@ -136,19 +136,24 @@ class Optimizer_TP(Optimizer):
         output = state['o']
         output_detach = state['o'].detach()
 
-        # train decoder_rec
-        for time in range(step_num - 1):
-            h_i_pred = self.decoder_rec(h_in_detach_s[time+1])
-            loss_pred = self.decoder_loss_func(h_i_pred, h_i_detach_s[time])
-            loss_pred.backward(retain_graph=True)
         # train decoder_out
         h_i_pred = self.decoder_out(output_detach)
         loss_pred = self.decoder_loss_func(h_i_pred, h_i_detach_s[step_num-2])
-        loss_pred.backward(retain_graph=True)
-        
-        self.decoder_out.print_grad()
-        self.decoder_rec.print_grad()
+        #loss_pred.backward(retain_graph=True)
+        loss_pred.backward()
 
+        # train decoder_rec
+        for time in range(step_num - 1):
+            h_i_pred = self.decoder_rec(h_in_detach_s[time+1])
+            #print(h_i_pred[0])
+            #print(h_i_detach_s[time][0])
+            pred_error_rate = torch.sum((torch.abs(h_i_pred - h_i_detach_s[time])) / torch.sum(torch.abs(h_i_detach_s[time]))).item()
+            self.pred_error_report = 'Prediction error rate: %.3f'%pred_error_rate
+            loss_pred = self.decoder_loss_func(h_i_pred, h_i_detach_s[time])
+            #loss_pred.backward(retain_graph=True)
+            loss_pred.backward()
+            #print_model_params(self.decoder_rec.bn1)
+            #input()
         self.optimizer_out.step()
         self.optimizer_rec.step()
 
@@ -191,12 +196,21 @@ class Optimizer_TP(Optimizer):
             output_truth = scatter_label(output_truth, num_class=self.num_class)
         # to be implemented: select a point in between output and output_truth
         return output_truth
-    def evaluate(self, data):
-        self.optimizer.zero_grad()
+    def evaluate(self, data, verbose=True):
         self.model.reset_perform()
-        loss = self.model.cal_perform(data)
-        #self.model.get_perform(prefix='test', verbose=True)
         self.optimizer.zero_grad()
+        for batch in list(data):
+            input, label = batch
+            loss = self.model.cal_perform({
+                #'input': inputs.to(self.model.device), 
+                #'output': labels.to(self.model.device),
+                'input': input, # [batch_size, C, H, W]
+                'output': label, # [batch_size, num_class]
+            })
+        test_perform = self.model.get_perform(prefix='test', verbose=verbose)
+        self.model.reset_perform()
+        self.optimizer.zero_grad()
+        return test_perform
     def update_epoch_init(self): # decide what need to be done after every epoch 
         self.update_func_list = []
         self.update_func_list.append(self.update_lr_init())

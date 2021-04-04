@@ -6,7 +6,6 @@ from utils_model import build_optimizer
 from Optimizers.Optimizer import *
 from Optimizers.Optimizer import Optimizer
 
-
 class Optimizer_BP(Optimizer):
     def __init__(self, dict_=None, load=False, options=None):
         super().__init__(dict_, load, options)
@@ -49,12 +48,19 @@ class Optimizer_BP(Optimizer):
         #loss = results['loss']
         loss.backward()
         self.optimizer.step()
-    def evaluate(self, data):
-        self.optimizer.zero_grad()
+    def evaluate(self, data, verbose=True):
         self.model.reset_perform()
-        loss = self.model.cal_perform(data)
-        #self.model.get_perform(prefix='test', verbose=True)
         self.optimizer.zero_grad()
+        for batch in list(data):
+            input, label = batch
+            loss = self.model.cal_perform({
+                'input': input, # [batch_size, C, H, W]
+                'output': label, # [batch_size, num_class]
+            })
+        test_perform = self.model.get_perform(prefix='test', verbose=verbose)
+        self.model.reset_perform()
+        self.optimizer.zero_grad()
+        return test_perform
     def update_epoch_init(self): # decide what need to be done after every epoch 
         self.update_func_list = []
         self.update_func_list.append(self.update_lr_init())

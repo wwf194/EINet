@@ -61,12 +61,12 @@ class Trainer():
 
         while self.epoch_now <= self.epoch_end:
             print('epoch=%d'%(self.epoch_now), end=' ')
-            train_loader, test_loader = self.data_loader.get_data()
+            train_data, test_data = self.data_loader.get_data()
             # train model
             self.model.reset_perform()
-            batch_num = len(train_loader)
+            batch_num = len(train_data)
             report_interval = int(batch_num / 10)
-            for batch_index, data in enumerate(train_loader):
+            for batch_index, data in enumerate(train_data):
                 #print('using batch No.%d\n'%(batch_num))
                 inputs, labels = data
                 self.optimizer.train({
@@ -75,26 +75,31 @@ class Trainer():
                 })
                 if batch_index % report_interval == 0:
                     self.optimizer.model.anal_weight_change()
-                    self.optimizer.decoder_rec.anal_weight_change()
-                    print('decoder_rec weight change')
-                    self.optimizer.decoder_out.anal_weight_change()
-                    print('decoder_out weight change')
+                    #self.optimizer.decoder_rec.print_grad()
+                    #self.optimizer.decoder_out.print_grad()
+                    self.optimizer.decoder_rec.anal_weight_change(title='decoder_rec weight change')
+                    self.optimizer.decoder_out.anal_weight_change(title='decoder_out weight change')
+                    if hasattr(self.optimizer, 'pred_error_report'):
+                        print(self.optimizer.pred_error_report)
                     pass
             train_perform = self.model.get_perform(prefix='train: ', verbose=True)
             self.train_performs[self.epoch_now] = train_perform
             
             # evaluate model
+            test_perform = self.optimizer.evaluate(test_data)
+            '''
             self.model.reset_perform()
-            for data in list(test_loader):
+            for data in list(test_data):
                 inputs, labels = data
                 self.optimizer.evaluate({
                     'input': inputs.to(self.model.device), 
                     'output': labels.to(self.model.device)
                 })
-            test_perform = self.model.get_perform(prefix='test: ', verbose=True)
+            '''
             self.test_performs[self.epoch_now] = test_perform
             if self.save_model and self.epoch_now%self.save_interval==1:
                 self.model.save(save_path=self.save_model_path, save_name=self.model.dict['name'] + '_epoch=%d'%self.epoch_now)
+            
 
             self.optimizer.update_epoch()
             self.epoch_now += 1
@@ -169,9 +174,9 @@ class Evaluator():
     def evaluate(self, model=None):
         model = self.model if model is None else model
         # evaluate model
-        train_loader, test_loader = self.data_loader.get_daat()
+        train_data, test_data = self.data_loader.get_data()
         model.reset_perform()
-        for data in list(train_loader):
+        for data in list(train_data):
             inputs, labels = data
             model.cal_perform(inputs.to(model.device), labels.to(model.device))
         test_perform = model.get_perform(prefix='test: ', verbose=True)

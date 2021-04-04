@@ -187,10 +187,16 @@ class RSLP(nn.Module):
             perform_str += prefix
         for key in self.perform_list.keys():
             if key in ['acc']:
-                perform_str += '%s:%.4f '%(key, self.perform_list[key]/self.sample_count)
+                if self.sample_count > 0:
+                    perform_str += '%s:%.4f '%(key, self.perform_list[key]/self.sample_count)
+                else:
+                    perform_str += '%s:no_log'%(key)
             else:
-                #print('%s:%s'%(key, str(self.perform_list[key]/self.batch_count)), end=' ')
-                perform_str += '%s:%.4e '%(key, self.perform_list[key]/self.batch_count)
+                if self.batch_count > 0:
+                    #print('%s:%s'%(key, str(self.perform_list[key]/self.batch_count)), end=' ')
+                    perform_str += '%s:%.4e '%(key, self.perform_list[key]/self.batch_count)
+                else:
+                    perform_str += '%s:no_log '%(key)
         if verbose:
             print(perform_str)
         return perform_str
@@ -201,7 +207,7 @@ class RSLP(nn.Module):
         for key in self.perform_list.keys():
             self.perform_list[key] = 0.0
     def cal_perform(self, data):
-        x, y = data['input'], data['output']
+        x, y = data['input'].to(self.device), data['output'].to(self.device)
         #x: [batch_size, step_num, input_num]
         #y: [batch_size, step_num, output_num]
         output, act = self.forward(x)
