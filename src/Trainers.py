@@ -51,12 +51,13 @@ class Trainer():
         self.train_performs = self.dict['train_performs'] = {}
 
         print_model_param(self.model)
-        print_model_param(self.optimizer.decoder_rec)
-        print_model_param(self.optimizer.decoder_out)
-        print(self.optimizer.decoder_rec.N_nums)
-        print(self.optimizer.decoder_out.N_nums)
-        print_optimizer_params(self.optimizer.optimizer_rec)
-        print_optimizer_params(self.optimizer.optimizer_out)
+        if hasattr(self.optimizer, 'decoder_rec') and hasattr(self.optimizer, 'decoder_out'):
+            print_model_param(self.optimizer.decoder_rec)
+            print_model_param(self.optimizer.decoder_out)
+            print(self.optimizer.decoder_rec.N_nums)
+            print(self.optimizer.decoder_out.N_nums)
+            print_optimizer_params(self.optimizer.optimizer_rec)
+            print_optimizer_params(self.optimizer.optimizer_out)
         print_optimizer_params(self.optimizer.optimizer)
 
         while self.epoch_now <= self.epoch_end:
