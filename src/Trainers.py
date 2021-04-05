@@ -4,7 +4,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 
 from utils import ensure_path, get_from_dict, search_dict
-from utils_model import print_model_params, print_optimizer_params
+from utils_model import print_model_param, print_optimizer_params
 
 class Trainer():
     def __init__(self, dict_, load=False, options=None):
@@ -50,9 +50,9 @@ class Trainer():
         self.test_performs = self.dict['test_performs'] = {}
         self.train_performs = self.dict['train_performs'] = {}
 
-        print_model_params(self.model)
-        print_model_params(self.optimizer.decoder_rec)
-        print_model_params(self.optimizer.decoder_out)
+        print_model_param(self.model)
+        print_model_param(self.optimizer.decoder_rec)
+        print_model_param(self.optimizer.decoder_out)
         print(self.optimizer.decoder_rec.N_nums)
         print(self.optimizer.decoder_out.N_nums)
         print_optimizer_params(self.optimizer.optimizer_rec)
@@ -77,10 +77,20 @@ class Trainer():
                     self.optimizer.model.anal_weight_change()
                     #self.optimizer.decoder_rec.print_grad()
                     #self.optimizer.decoder_out.print_grad()
+                    '''
                     self.optimizer.decoder_rec.anal_weight_change(title='decoder_rec weight change')
                     self.optimizer.decoder_out.anal_weight_change(title='decoder_out weight change')
-                    if hasattr(self.optimizer, 'pred_error_report'):
-                        print(self.optimizer.pred_error_report)
+                    if hasattr(self.optimizer, 'output_grad_example'):
+                        print('%s. output_grad_example'%self.optimizer.output_grad_example)
+                    if hasattr(self.optimizer, 'output_example'):
+                        print('%s. output_example'%self.optimizer.output_example)
+                    if hasattr(self.optimizer, 'output_target_example'):
+                        print('%s. output_target_example'%self.optimizer.output_target_example)
+                    if hasattr(self.optimizer, 'output_truth_example'):
+                        print('%s. output_truth_example'%self.optimizer.output_truth_example)
+                    '''
+                    if hasattr(self.optimizer, 'pred_error_rates'):
+                        print('pred_error_rates: %s'%self.optimizer.pred_error_rates)
                     pass
             train_perform = self.model.get_perform(prefix='train: ', verbose=True)
             self.train_performs[self.epoch_now] = train_perform

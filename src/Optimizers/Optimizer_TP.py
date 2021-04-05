@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 from utils import search_dict
-from utils_model import build_optimizer, build_mlp, get_loss_func, scatter_label, print_model_params
+from utils_model import build_optimizer, build_mlp, get_loss_func, scatter_label, print_model_param
 
 from Optimizers.Optimizer import *
 from Optimizers.Optimizer import Optimizer
@@ -107,6 +107,7 @@ class Optimizer_TP(Optimizer):
     def train_on_h(self, data, step_num=None, model=None):
         #x, y = data['input'], ['output']
         x = data['input']
+        output_truth = data['output'].to(self.model.device) # torch.LongTensor
         if step_num is None:
             step_num = self.model.step_num
         if model is None:
@@ -118,6 +119,7 @@ class Optimizer_TP(Optimizer):
         self.decoder_out.zero_grad()
         self.decoder_rec.zero_grad()
 
+        #print('%s jjj'%self.model.i.grad)
         # forward
         h_in_detach = torch.zeros([x.size(0), N_num]).to(model.device)
         h_in_detach_s = []
@@ -136,41 +138,61 @@ class Optimizer_TP(Optimizer):
         output = state['o']
         output_detach = state['o'].detach()
 
-        # train decoder_out
-        h_i_pred = self.decoder_out(output_detach)
-        loss_pred = self.decoder_loss_func(h_i_pred, h_i_detach_s[step_num-2])
-        #loss_pred.backward(retain_graph=True)
-        loss_pred.backward()
-
+        
+        '''
         # train decoder_rec
+        self.pred_error_rates = []
         for time in range(step_num - 1):
-            h_i_pred = self.decoder_rec(h_in_detach_s[time+1])
+            h_i_pred = self.model.forward_once_no_grad(self.decoder_rec(h_in_detach_s[time + 1]))
             #print(h_i_pred[0])
             #print(h_i_detach_s[time][0])
             pred_error_rate = torch.sum((torch.abs(h_i_pred - h_i_detach_s[time])) / torch.sum(torch.abs(h_i_detach_s[time]))).item()
+            self.pred_error_rates.append('%.3f'%pred_error_rate)
             self.pred_error_report = 'Prediction error rate: %.3f'%pred_error_rate
             loss_pred = self.decoder_loss_func(h_i_pred, h_i_detach_s[time])
             #loss_pred.backward(retain_graph=True)
             loss_pred.backward()
-            #print_model_params(self.decoder_rec.bn1)
+            #print_model_param(self.decoder_rec.bn1)
             #input()
+
+        # train decoder_out
+        h_i_pred = self.decoder_out(output_detach)
+        loss_pred = self.decoder_loss_func(h_i_pred, h_i_detach_s[step_num - 2])
+        #loss_pred.backward(retain_graph=True)
+        loss_pred.backward()
+        pred_error_rate = torch.sum((torch.abs(h_i_pred - h_i_detach_s[time - 2])) / torch.sum(torch.abs(h_i_detach_s[time - 2]))).item()
+        self.pred_error_rates.append('%.3f'%pred_error_rate)
         self.optimizer_out.step()
         self.optimizer_rec.step()
+        '''
+        
+        # train decoder_out
+        output_target = self.get_target(output_detach, output_truth)
+        output_target_1 = self.model.forward_once_no_grad(self.decoder_out(output_target))
+        loss_decoder_out = self.decoder_loss_func(output_target_1, output_target)
 
+        #print('%s hhh'%self.model.i.grad)
         # train model
         N_num = model.N_num
-        output_truth = data['output']
-        output_target = self.get_target(output_detach, output_truth).detach()
-        loss = self.main_loss_func(output, output_target)
-        loss.backward(retain_graph=True)
+        
+        #print(output_truth.type())
+        output_target = self.get_target(output_detach, output_truth)
+        loss = F.mse_loss(output, output_target)
+        #loss.backward(retain_graph=True)
+        loss.backward()
+        
+        #print('%s aaa'%self.model.i.grad)
         # calculate target
         h_i_target = self.decoder_out(output_detach).detach()
         time = step_num - 2
         while(time>=0):
-            loss_h = self.main_loss_func(h_i_target[:, 0:N_num], h_out_s[time])
+            loss_h = F.mse_loss(h_i_target[:, 0:N_num], h_out_s[time])
             loss_h.backward(retain_graph=True)
-            loss_i = self.main_loss_func(h_i_target[:, N_num:], i_s[time])
+            #print('%s bbb'%self.model.i.grad)
+            loss_i = F.mse_loss(h_i_target[:, N_num:], i_s[time])
             loss_i.backward(retain_graph=True)
+            #print('%s ccc time=%d'%(self.model.i.grad, time))
+            input()
             h_i_target = self.decoder_rec(h_i_target[:, 0:N_num]).detach()
             time -= 1
         self.optimizer.step()
@@ -184,17 +206,29 @@ class Optimizer_TP(Optimizer):
         output_detach = output.detach()
         output_detach.requires_grad = True
         output_detach.retain_grad()
-        loss = F.cross_entropy(output, output_truth)
+        loss = F.cross_entropy(output_detach, output_truth)
         loss.backward()
-        print(output_detach.grad)
-        print('ratio of output_detach.grad / output_detach: %.4f'%coeff * (torch.sum(torch.abs(output_detach.grad))/torch.sum(torch.abs(output_detach)).item()))
+        self.output_grad_example = output_detach.grad[0:2]
+        self.output_example = output_detach[0:2]
+        #print(torch.sum(torch.abs(output_detach.grad)))
+        #print(torch.sum(torch.abs(output_detach)))
+        ratio = (torch.sum(torch.abs(output_detach.grad))/torch.sum(torch.abs(output_detach))).item()
+        #print(ratio)
+        coeff = 1.0 / ratio
+        #print(coeff)
+        #print('ratio of output_detach.grad / output_detach: %.4f'%(coeff * ratio))
         output_target = output_detach - coeff * output_detach.grad
-        return output_target
+        #print('%s. output_target'%output_target)
+        #input()
+        self.output_target_example = output_target[0:2]
+        return output_target.detach()
     def get_target_mse(self, output, output_truth, is_label=True):
         if is_label:
             #print(output_truth)
             output_truth = scatter_label(output_truth, num_class=self.num_class)
         # to be implemented: select a point in between output and output_truth
+        self.output_example = output[0:2]
+        self.output_truth_example = output_truth[0:2]
         return output_truth
     def evaluate(self, data, verbose=True):
         self.model.reset_perform()
@@ -207,7 +241,7 @@ class Optimizer_TP(Optimizer):
                 'input': input, # [batch_size, C, H, W]
                 'output': label, # [batch_size, num_class]
             })
-        test_perform = self.model.get_perform(prefix='test', verbose=verbose)
+        test_perform = self.model.get_perform(prefix='test: ', verbose=verbose)
         self.model.reset_perform()
         self.optimizer.zero_grad()
         return test_perform

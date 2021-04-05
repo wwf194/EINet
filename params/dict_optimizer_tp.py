@@ -1,5 +1,5 @@
 lr = 1.0e-2
-lr_decoder = 10 * lr
+lr_decoder = 1.0e-2
 sub_optimizer_type = 'sgd'
 decoder_type = 'mlp'
 decoder_act_func = 'relu'
@@ -8,7 +8,7 @@ decoder_batch_norm = True
 dict_ ={
     'class': 'optimizer',
     'loss':{
-        'main_loss': 'MSE', # loss function to compute main loss
+        'main_loss': 'CEL', # loss function to compute main loss
         'main_loss_coeff': 1.0,
         'act_coeff': 0.0e-4, # coefficient of L2 loss of average fire rate over time_step and neuron
     },
@@ -24,6 +24,7 @@ dict_ ={
         'lr': lr_decoder,
         #'alter_weight_scale': True, # a simple way to alter weight scale to match output level.
         'batch_norm': decoder_batch_norm,
+        #'init_weight': ['orthogonal', 1.0]
     },
     'decoder_out':{
         'type': decoder_type,
@@ -32,6 +33,7 @@ dict_ ={
         'lr': lr_decoder,
         #'alter_weight_scale': True,
         'batch_norm': decoder_batch_norm, # batch norm automatically alterate scale of weights and biases are to appropriate scale.
+        #'init_weight': ['orthogonal', 1.0]
     },
     'optimizer_forward':{
         'lr':lr,

@@ -57,7 +57,7 @@ class Optimizer_BP(Optimizer):
                 'input': input, # [batch_size, C, H, W]
                 'output': label, # [batch_size, num_class]
             })
-        test_perform = self.model.get_perform(prefix='test', verbose=verbose)
+        test_perform = self.model.get_perform(prefix='test: ', verbose=verbose)
         self.model.reset_perform()
         self.optimizer.zero_grad()
         return test_perform

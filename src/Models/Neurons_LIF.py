@@ -10,7 +10,7 @@ from utils_model import init_weight, get_ei_mask, get_mask, get_cons_func, get_a
 
 #training parameters.
 class Neurons_LIF(nn.Module):
-    def __init__(self, dict_, load=False):#input_num is neuron_num.
+    def __init__(self, dict_, load=False):#input_num is N_num.
         super(Neurons_LIF, self).__init__()
         self.dict = dict_
         
@@ -18,7 +18,7 @@ class Neurons_LIF(nn.Module):
         #self.device = self.dict['device']
         
         if load:
-            self.f = self.dict['f']
+            self.o = self.dict['o']
             self.r = self.dict['r']
             self.b = self.dict['b']
             if self.dict['init_weight'] in ['nonzero']:
@@ -29,13 +29,13 @@ class Neurons_LIF(nn.Module):
             else:
                 self.b = 0.0
             self.dict['b'] = self.b
-            self.f = torch.nn.Parameter(torch.zeros((self.dict['N_num'], self.dict['output_num']), device=self.device, requires_grad=True))
+            self.o = torch.nn.Parameter(torch.zeros((self.dict['N_num'], self.dict['output_num']), device=self.device, requires_grad=True))
             self.r = torch.nn.Parameter(torch.zeros((self.dict['N_num'], self.dict['N_num']), device=self.device, requires_grad=True))
-            self.dict['f'] = self.f
+            self.dict['o'] = self.o
             self.dict['r'] = self.r
             
             init_weight(self.r, self.dict['init_weight']['r'])
-            init_weight(self.f, self.dict['init_weight']['f'])             
+            init_weight(self.o, self.dict['init_weight']['o'])             
 
         # set recurrent weight
         if self.dict['noself']:
@@ -49,35 +49,31 @@ class Neurons_LIF(nn.Module):
         
         self.cons_func = get_cons_func(self.dict['cons_method'])
         if 'r' in self.dict['Dale']:
-            #print('ccc')
             self.ei_mask = get_ei_mask(E_num=self.dict['E_num'], N_num=self.dict['N_num']).to(self.device)
             self.get_r_ei = lambda :torch.mm(self.ei_mask, self.cons_func(self.get_r_noself()))
         else:
-            #print('ddd')
             self.get_r_ei = self.get_r_noself
         if 'r' in self.dict['mask']:
-            #print('eee')
             self.r_mask = get_mask(N_num=self.dict['N_num'], output_num=self.dict['N_num']).to(self.device)
             self.get_r_mask = lambda :self.r_mask * self.get_r_ei()
         else:
-            #print('fff')
             self.get_r_mask = self.get_r_ei
             
         self.get_r = self.get_r_mask
 
-        #set forward weight
-        if('f' in self.dict['Dale']): #set mask for EI separation
+        # set forward weight
+        if 'o' in self.dict['Dale']: #set mask for EI separation
             if(self.ei_mask is None):
                 self.ei_mask = get_ei_mask(E_num=self.dict['E_num'], N_num=self.dict['N_num'])
-            self.get_f_ei = lambda :torch.mm(self.ei_mask, self.cons_func(self.f))
+            self.get_o_ei = lambda :torch.mm(self.ei_mask, self.cons_func(self.o))
         else:
-            self.get_f_ei = lambda :self.f
-        if('f' in self.dict['mask']): #set mask for connection pruning
-            self.f_mask = get_mask(N_num=self.dict['N_num'], output_num=self.dict['output_num'])
-            self.get_f_mask = lambda :self.f_mask * self.get_f_ei()
+            self.get_o_ei = lambda :self.o
+        if 'o' in self.dict['mask']: #set mask for connection pruning
+            self.o_mask = get_mask(N_num=self.dict['N_num'], output_num=self.dict['output_num'])
+            self.get_o_mask = lambda :self.o_mask * self.get_o_ei()
         else:
-            self.get_f_mask = self.get_f_ei            
-        self.get_f = self.get_f_mask
+            self.get_o_mask = self.get_o_ei            
+        self.get_o = self.get_o_mask
 
         self.N_num = self.dict['N_num']
         if self.dict['separate_ei']:
@@ -99,10 +95,10 @@ class Neurons_LIF(nn.Module):
             self.cal_x = self.cal_x_uni
             self.get_weight = self.get_weight_uni
             self.response = self.response_uni
-            self.weight_names = ['N->Y','N->N','N.f','f','b','r']
+            self.weight_names = ['N->Y','N->N','N.f','o','b','r']
 
-        if self.noise_coeff==0.0:
-            self.get_noise = lambda batch_size, neuron_num:0.0
+        if self.noise_coeff == 0.0:
+            self.get_noise = lambda batch_size, N_num:0.0
         else:
             self.get_noise = self.get_noise_gaussian
 
@@ -116,10 +112,11 @@ class Neurons_LIF(nn.Module):
         #print(self.ei_mask)
         #print(self.get_weight(name='I->I'))
         #input()
-
+    def get_init_state_zero(self, **kw):
+        batch_size = kw['batch_size']
+        return torch.zeros(, device=self.device)
     def reset_x_zero(self, **kw):
         #print(batch_size)
-        
         self.x = torch.zeros((kw['batch_size'], self.dict['N_num']), device=self.device) #(batch_size, input_num)
     def get_noise_gaussian(self, batch_size, N_num):
         noise = torch.zeros((batch_size, N_num), device=self.device)
@@ -127,44 +124,85 @@ class Neurons_LIF(nn.Module):
         return noise
     def act_func_ei(self, x):
         return torch.cat( [self.act_func_e(x[:, 0:self.E_num]), self.act_func_i(x[:, self.E_num:self.N_num])], dim=1)
-    def cal_x_uni(self, dx):
-        return (1.0 - self.time_const) * (self.x + self.get_noise(dx.size(0), self.N_num)) + self.time_const * dx #x: [batch_size, neuron_num]
-    def cal_x_ei(self, dx):
-        x_e = (1.0 - self.time_const_e) * (self.x[:, 0:self.E_num] + self.get_noise(dx.size(0), self.E_num)) + self.time_const_e * dx[:, 0:self.E_num] #x: [batch_size, E_num]
-        x_i = (1.0 - self.time_const_i) * (self.x[:, self.E_num:self.N_num] + self.get_noise(dx.size(0), self.I_num)) + self.time_const_i * dx[:, self.E_num:self.N_num] #x: [batch_size, I_num]        
+    def cal_x_uni(self, dx, x=None):
+        if x is None:
+            x = self.x
+        return (1.0 - self.time_const) * (x + self.get_noise(dx.size(0), self.N_num)) + self.time_const * dx #x: [batch_size, N_num]
+    def cal_x_ei(self, dx, x=None):
+        if x is None:
+            x = self.x
+        x_e = (1.0 - self.time_const_e) * (x[:, 0:self.E_num] + self.get_noise(dx.size(0), self.E_num)) + self.time_const_e * dx[:, 0:self.E_num] # x: [batch_size, E_num]
+        x_i = (1.0 - self.time_const_i) * (x[:, self.E_num:self.N_num] + self.get_noise(dx.size(0), self.I_num)) + self.time_const_i * dx[:, self.E_num:self.N_num] # x: [batch_size, I_num]        
         return torch.cat([x_e, x_i], dim=1)
     def forward(self, i):
         dx = i + self.b
-        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
+        self.x = self.cal_x(dx) #x: [batch_size, N_num]
         u = self.act_func(self.x)
-        o = u.mm(self.get_f())
+        o = u.mm(self.get_o())
         h = u.mm(self.get_r())
         return o, h, u
-    def forward_once(self, i, detach_u=False):
+    def forward_once(self, x=None, h=None, i=None, detach_u=False):
+        if x is None:
+            x = self.get_init_state(batch_size=i.size(0))
         dx = i + self.b
-        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
-        u = self.act_func(self.x)
+        x = self.cal_x(dx, x=x) #x: [batch_size, N_num]
+        u = self.act_func(x)
         if detach_u:
-            u_ = u.detach()
+            u_detach = u.detach()
+            o = u_detach.mm(self.get_o())
+            h = u_detach.mm(self.get_r())
+            return {
+                'u_detach': u_detach,
+                'x': x,
+                'h': h,
+                'o': o,
+            }
         else:
-            u_ = u
-        o = u_.mm(self.get_f())
-        h = u_.mm(self.get_r())
-        return o, h, u_
+            o = u.mm(self.get_o())
+            h = u.mm(self.get_r())
+            return {
+                'u': u,
+                'x': x,
+                'h': h,
+                'o': o,
+            }
+    def forward_once_no_grad(self, x, h, i, detach_u=False):
+        dx = i + self.b
+        x = self.cal_x(dx, x=x) #x: [batch_size, N_num]
+        u = self.act_func(x)
+        if detach_u:
+            u_detach = u.detach()
+            o = u_detach.mm(self.get_o().detach())
+            h = u_detach.mm(self.get_r().detach())
+            return {
+                'u_detach': u_detach,
+                'x': x,
+                'h': h,
+                'o': o,
+            }
+        else:
+            o = u.mm(self.get_o().detach())
+            h = u.mm(self.get_r().detach())
+            return {
+                'u': u,
+                'x': x,
+                'h': h,
+                'o': o,
+            }
     def response_uni(self, i_):
         res = {}
         dx = i_ + self.b
-        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
+        self.x = self.cal_x(dx) #x: [batch_size, N_num]
         res['x'] = self.x
         u = self.act_func(self.x)
         res['u'] = u
-        res['f'] = u.mm(self.get_f())
+        res['o'] = u.mm(self.get_o())
         res['r'] = u.mm(self.get_r())
         return res
     def response_ei(self, i_):
         res = {}
         dx = i_ + self.b
-        self.x = self.cal_x(dx) #x: [batch_size, neuron_num]
+        self.x = self.cal_x(dx) #x: [batch_size, N_num]
         u = self.act_func(self.x)
         res['u'] = u
 
@@ -178,7 +216,7 @@ class Neurons_LIF(nn.Module):
         res['I->E'] = torch.mm(res['I.u'], self.cache['weight_cache']['I->E'])
         res['I->I'] = torch.mm(res['I.u'], self.cache['weight_cache']['I->I'])
         
-        f = u.mm(self.get_f())
+        f = u.mm(self.get_o())
         r = u.mm(self.get_r())
         res['N->Y'] = f
         res['N->N'] = r
@@ -201,9 +239,9 @@ class Neurons_LIF(nn.Module):
             w = self.get_r()[self.E_num:self.N_num, 0:self.E_num]
             sig_r = True
         elif name in ['E.f', 'E->Y']:
-            w = self.get_f()[0:self.E_num, :]
+            w = self.get_o()[0:self.E_num, :]
         elif name in ['I.f', 'I->Y']:
-            w = self.get_f()[self.E_num:self.N_num, :]
+            w = self.get_o()[self.E_num:self.N_num, :]
             sig_f = True
         elif name in ['b']:
             w = self.b
@@ -223,15 +261,15 @@ class Neurons_LIF(nn.Module):
             #print(w)
             if positive:
                 w = torch.abs(w)
-        elif name in ['f']:
-            w = self.get_f()
+        elif name in ['o']:
+            w = self.get_o()
         else:
             return 'invalid weight name:%s'%(name)
         if detach:
             w = w.detach()
         if(positive and sig_r and ('r' in self.dict['Dale'])):
             w = - w
-        elif(positive and sig_f and ('f' in self.dict['Dale'])):
+        elif(positive and sig_f and ('o' in self.dict['Dale'])):
             w = - w
     
         return w
@@ -248,6 +286,6 @@ class Neurons_LIF(nn.Module):
         weight_cache['I->I'] = N_r[self.E_num:self.N_num, self.E_num:self.N_num]
         weight_cache['E->I'] = N_r[0:self.E_num, self.E_num:self.N_num]
         weight_cache['I->E'] = N_r[self.E_num:self.N_num, 0:self.E_num]
-        N_f = self.get_weight('f')
+        N_f = self.get_weight('o')
         weight_cache['E->Y'] = N_f[0:self.E_num, :]
         weight_cache['I->Y'] = N_f[self.E_num:self.N_num, :]

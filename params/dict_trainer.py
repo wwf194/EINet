@@ -1,6 +1,6 @@
 dict_ = {
     'epoch_num': 100,
-    'batch_size': 64,
+    'batch_size': 128,
     # params about saving model.
     'save_model':True,
     'save_before_train': True,
